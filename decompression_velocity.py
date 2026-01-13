@@ -21,14 +21,14 @@ L = 2.1
 D = 0.45
 V0 = math.pi * (D/2)**2 * L  # 初始体积 m³
 r = 1.41
-P0 = 1e6  # 初始压力 Pa
+Pair = 1e6  # 环境压力 Pa
 T0 = 293  # 初始温度 K
 R = 8.14
 t1 = 0.4 / 200
-t2 = 0.5 / 200
+t2 = 0.9 / 200
 
 class IsentropicFlowSimulator:
-    def __init__(self,gas_name = "hydrogen", P0=1e6, T0=293, u0=0.0, dt=1e-5, max_steps=10000):
+    def __init__(self,gas_name = "hydrogen", P0=8e6, T0=293, u0=0.0, dt=1e-5, max_steps=10000):
         """
         初始化等熵流动模拟器
         
@@ -55,6 +55,7 @@ class IsentropicFlowSimulator:
         
         self.gamma = self.gas[gas_name]["gamma"]
         self.R = self.gas[gas_name]["R"]
+        self.molar = self.gas[gas_name]["molar_mass"]
         self.P0 = P0
         self.T0 = T0
         self.rho0 = self.P0 / self.R / self.T0
@@ -93,18 +94,22 @@ class IsentropicFlowSimulator:
         """计算局部波速: W_local = a - u"""
         return a - u
     
-    def calculate_Qv(self, time):
+    def calculate_Qv(self, time, P_current):
         A = self.calulate_leakage_area(time)
-        Qv = A * self.P0 / math.sqrt(self.R * self.T0) * pow((2/(self.gamma + 1)),(1 / (self.gamma - 1))) * math.sqrt(2 * self.gamma / (self.gamma + 1))  # 假设温度Tc为常数
+        # Qv = A * self.P0 / math.sqrt(self.R * self.T0) * pow((2/(self.gamma + 1)),(1 / (self.gamma - 1))) * math.sqrt(2 * self.gamma / (self.gamma + 1))  # 假设温度Tc为常数
+        temp = pow(2 / (self.gamma + 1), (self.gamma + 1)/(self.gamma - 1))
+        v =  P_current * math.sqrt(self.gamma / (self.R * self.T0) * temp)
+        Qv = v * A / 10
         return Qv
     
     def update_state(self, P_prev, rho_prev, u_prev, m_prev, t):
         """
         使用公式1更新状态: u_i = u_{i-1} + (P_{i-1} - P_i)/(a_i * ρ_i)
         """
-        Qv = self.calculate_Qv(t)  # 假设温度Tc为常数
-        Qm = Qv * self.dt
+        Qv = self.calculate_Qv(t, P_prev)  # 假设温度Tc为常数
+        Qm = Qv * self.dt * rho_prev
         m_current = m_prev - Qm  # 质量守恒
+        print("m_current", m_current)
         P_current = P_prev * m_current / m_prev
         
         rho_current = rho_prev * (P_current / P_prev) ** (1/self.gamma)

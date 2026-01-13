@@ -4,7 +4,7 @@ from tools import draw
 
 simulator = IsentropicFlowSimulator(
         gas_name="hydrogen",
-        P0=4e6,      # 10MPa
+        P0=8e6,      # 8MPa
         T0=293,    # 293 K
         u0=0.0,      # 初始静止
         dt=1e-5,     # 时间步长
@@ -13,13 +13,14 @@ simulator = IsentropicFlowSimulator(
 gas_results = simulator.simulate(target_W=0.0, tolerance=1e-3)
 
 CrackVelocityCalculator_instance = CrackVelocityCalculator(
-    t=6.3,        # 管道壁厚 (mm)
+    t=6,        # 管道壁厚 (mm)
     D=450.0,       # 管道直径 (mm)
     YS=400.0,      # 屈服应力 (MPa)
     TS=500.0,      # 抗拉强度 (MPa)
-    P=4,         # 裂纹尖端扩展压力 (MPa)
-    Cv=200.0,      # 夏比冲击吸收能量 (J)
-    Ac=100.0      # 预裂纹夏比试样韧带面积 (mm²)
+    Pmin=1,         # 最小裂纹尖端扩展压力 (MPa)
+    Pmax=12,        # 最大裂纹尖端扩展压力 (MPa)
+    Cv=50.0,      # 夏比冲击吸收能量 (J)
+    Ac=80.0      # 预裂纹夏比试样韧带面积 (mm²)
 )
 crack_results = CrackVelocityCalculator_instance.calculate()
 

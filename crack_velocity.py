@@ -19,12 +19,13 @@ class CrackVelocityCalculator:
     包含计算流动应力、裂纹止裂压力、裂纹速度和断裂阻力比的方法
     """
 
-    def __init__(self, t = 6.3, D = 450.0, YS = 430, TS = 530, P = 8.0, Cv = 100.0, Ac = 100.0):
+    def __init__(self, t = 6.3, D = 450.0, YS = 430, TS = 530, Pmin = 1, Pmax = 12, Cv = 100.0, Ac = 100.0):
         self.t = t  # 壁厚 mm
         self.D = D  # 直径 mm
         self.YS = YS  # 屈服应力 MPa
         self.TS = TS  # 抗拉强度 MPa
-        self.P = P  # 扩展压力 MPa
+        self.Pmin = Pmin  # 最小扩展压力 MPa
+        self.Pmax = Pmax  # 最大扩展压力 MPa
         self.Cv = Cv  # 夏比冲击能量 J
         self.Ac = Ac  # 韧带面积 mm²
         self.P_min = 1.0  # 最小压力 MPa
