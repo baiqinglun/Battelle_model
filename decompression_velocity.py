@@ -17,18 +17,8 @@ font_name = matplotlib.font_manager.FontProperties(fname="C:\\Windows\\Fonts\\si
 rcParams['font.sans-serif'] = [font_name]
 rcParams['axes.unicode_minus'] = False
 
-L = 2.1
-D = 0.45
-V0 = math.pi * (D/2)**2 * L  # 初始体积 m³
-r = 1.41
-Pair = 1e6  # 环境压力 Pa
-T0 = 293  # 初始温度 K
-R = 8.14
-t1 = 0.4 / 200
-t2 = 0.9 / 200
-
 class IsentropicFlowSimulator:
-    def __init__(self,gas_name = "hydrogen", P0=8e6, T0=293, u0=0.0, dt=1e-5, max_steps=10000):
+    def __init__(self,gas_name = "hydrogen", P0=8e6, T0=293, u0=0.0, dt=1e-5, max_steps=10000, crack_v=200, A=0.4*0.05):
         """
         初始化等熵流动模拟器
         
@@ -62,6 +52,15 @@ class IsentropicFlowSimulator:
         self.u0 = u0
         self.dt = dt
         self.max_steps = max_steps
+        self.crack_v = crack_v
+        self.A = A
+        self.t1 = 0.4 / crack_v
+        self.t2 = 0.9 / crack_v
+        self.L = 2.1
+        self.D = 0.45
+        self.V0 = math.pi * (self.D/2)**2 * self.L  # 初始体积 m³
+        self.Pair = 0.0  # 停止压力 Pa
+        self.R_ = 8.314  # J/(mol·K)
         
         # 存储模拟结果
         self.results = {
@@ -76,14 +75,12 @@ class IsentropicFlowSimulator:
     
     def calulate_leakage_area(self, time):
         """计算泄漏面积 A (m²)"""
-        crack_v = 200
-        if time < t1:
-            A = crack_v * time * 0.05
-        elif time < t2:
-            A = (0.4 + crack_v * (time - t1) * math.sqrt(2)) * (0.05 + crack_v * (time - t1) * math.sqrt(2))
+        if time < self.t1:
+            A = self.crack_v * time * 0.05
+        elif time < self.t2:
+            A = (0.4 + self.crack_v * (time - self.t1) * math.sqrt(2)) * (0.05 + self.crack_v * (time - self.t1) * math.sqrt(2))
         else:
-            A = (0.4 + crack_v * (t2 - t1) * math.sqrt(2)) * (0.05 + crack_v * (t2 - t1) * math.sqrt(2))
-        print(A)
+            A = (0.4 + self.crack_v * (self.t2 - self.t1) * math.sqrt(2)) * (0.05 + self.crack_v * (self.t2 - self.t1) * math.sqrt(2))
         return A
     
     def calculate_sound_speed(self, P, rho):
@@ -95,23 +92,33 @@ class IsentropicFlowSimulator:
         return a - u
     
     def calculate_Qv(self, time, P_current):
-        A = self.calulate_leakage_area(time)
-        # Qv = A * self.P0 / math.sqrt(self.R * self.T0) * pow((2/(self.gamma + 1)),(1 / (self.gamma - 1))) * math.sqrt(2 * self.gamma / (self.gamma + 1))  # 假设温度Tc为常数
         temp = pow(2 / (self.gamma + 1), (self.gamma + 1)/(self.gamma - 1))
         v =  P_current * math.sqrt(self.gamma / (self.R * self.T0) * temp)
-        Qv = v * A / 10
+        Qv = v * self.A
+        print(f"计算得到的 Qv = {Qv:.6f} kg/s")
+        return Qv
+
+    def read_Qv_from_csv(self, time):
+        """从CSV文件中读取Qv值"""
+        import pandas as pd
+        df = pd.read_csv('Q.csv')
+        # 假设CSV文件有两列：time_ms和mass_flow_rate_kg_per_s
+        # 将time_ms转换为秒
+        df['time_s'] = df['time_ms'] / 1000.0
+        # 找到最接近当前时间的行
+        closest_row = df.iloc[(df['time_s'] - time).abs().argsort()[:1]]
+        Qv = closest_row['mass_flow_rate_kg_per_s'].values[0]
         return Qv
     
     def update_state(self, P_prev, rho_prev, u_prev, m_prev, t):
         """
         使用公式1更新状态: u_i = u_{i-1} + (P_{i-1} - P_i)/(a_i * ρ_i)
         """
-        Qv = self.calculate_Qv(t, P_prev)  # 假设温度Tc为常数
+        # Qv = self.read_Qv_from_csv(t)  # 假设温度Tc为常数
+        Qv = self.calculate_Qv(t, P_prev)
         Qm = Qv * self.dt * rho_prev
         m_current = m_prev - Qm  # 质量守恒
-        print("m_current", m_current)
         P_current = P_prev * m_current / m_prev
-        
         rho_current = rho_prev * (P_current / P_prev) ** (1/self.gamma)
         
         # 计算新的声速
@@ -137,7 +144,7 @@ class IsentropicFlowSimulator:
         u = self.u0
         a = self.calculate_sound_speed(P, rho)
         W = self.calculate_W_local(a, u)
-        m = rho * V0  # 初始质量
+        m = rho * self.V0  # 初始质量
         
         t = 0.0
         step = 0
@@ -154,7 +161,7 @@ class IsentropicFlowSimulator:
             self.results['sound_speed'].append(a)
             self.results['W_local'].append(W)
             self.results['time'].append(t)
-            self.results['quantity'].append(rho * V0)  # 假设体积V0不变
+            self.results['quantity'].append(rho * self.V0)  # 假设体积V0不变
             
             # 检查是否达到目标
             if np.abs(W - target_W) < tolerance:
@@ -164,6 +171,7 @@ class IsentropicFlowSimulator:
             if W < 0:
                 print(f"\n在t={t:.6f}s时W_local变为负值: W_local = {W:.6f} m/s")
                 print(f"最终状态: P={P:.1f} Pa, u={u:.3f} m/s")
+                print("+" * 80)
                 break
             
             # 更新状态
@@ -299,17 +307,14 @@ def main():
     """主函数：运行模拟并绘制结果"""
     # 创建模拟器实例
     # 参数说明：
-    # gamma=1.4: 空气的比热比
-    # P0=5e5: 初始压力 0.5 MPa
-    # rho0=5.0: 初始密度 5.0 kg/m³ (高压气体)
-    # u0=0.0: 初始速度为0
     simulator = IsentropicFlowSimulator(
         gas_name="hydrogen",
         P0=8e6,      # 800 kPa
         T0=293,      # 293 K
         u0=0.0,      # 初始静止
         dt=1e-6,     # 时间步长
-        max_steps=1e5
+        max_steps=1e5,
+        crack_v=200
     )
     
     # 运行模拟，直到W_local接近0
@@ -334,5 +339,5 @@ def main():
     print(f"  a - u: {results['sound_speed'][idx_near_zero] - results['velocity'][idx_near_zero]:.6f} m/s")
 
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

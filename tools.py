@@ -16,7 +16,7 @@ def draw(data_series, xlabel='', ylabel='', title='', xlim=None, ylim=None):
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    plt.savefig('out/pressure_velocity_curve.png', dpi=300)
+    plt.savefig(f'out/{title}.png', dpi=300)
 
     plt.tight_layout()
     plt.show()

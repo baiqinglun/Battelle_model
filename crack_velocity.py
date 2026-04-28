@@ -50,7 +50,6 @@ class CrackVelocityCalculator:
         """
         return (YS + TS) / 2
 
-
     def calculate_arrest_pressure(self, t, D, sigma_flow, R):
         """
         计算裂纹止裂压力 Pa
@@ -113,14 +112,16 @@ class CrackVelocityCalculator:
         DpAp: 断裂阻力比
         """
         # 计算各项
+        Dp = 3.29 * t ** 0.5 * Cv ** 0.544
+        DpAp = Dp / Ac
+        print(f"根据 Dp 计算得到的 Dp/Ap = {DpAp:.4f}")
         term1 = t ** 0.5
         term2 = (Cv / Ac) ** 0.544
-        
-        # 计算Dp/Ap
         DpAp = COEFF_DpAp * term1 * term2
+        print(f"计算得到的 Dp/Ap = {DpAp:.4f}")
+        
         
         return DpAp
-
 
     def calculate_R(self, t, Cv, Ac):
         """
@@ -176,7 +177,8 @@ class CrackVelocityCalculator:
             "Dp/Ap": DpAp
         }
 
-    def calculate_decompression_velocity(self, P0, T0, gas_composition, gas_type="hydrogen"):
+
+    def calculate_decompression_velocity(self, P0, T0, gas_type="hydrogen"):
         """
         计算天然气管道的减压速度
         
