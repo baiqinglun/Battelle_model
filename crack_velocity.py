@@ -29,7 +29,7 @@ class CrackVelocityCalculator:
         self.Cv = Cv  # 夏比冲击能量 J
         self.Ac = Ac  # 韧带面积 mm²
         self.P_min = 1.0  # 最小压力 MPa
-        self.P_max = 15.0  # 最大压力 MPa
+        self.P_max = 10.0  # 最大压力 MPa
         self.dP = 0.1
         
         self.results = {
@@ -64,14 +64,14 @@ class CrackVelocityCalculator:
         Pa: 裂纹止裂压力 (MPa)
         """
         # 计算内部项
-        inner_term = (-COEFF_TERM / math.sqrt(D * t)) * (R / (sigma_flow ** 2))
+        inner_term = (-3.81 * 10**7 / math.sqrt(D * t)) * (R / (sigma_flow ** 2))
         
         # 计算指数和反余弦
         exp_term = math.exp(inner_term)
         arccos_term = math.acos(exp_term)  # math.acos返回弧度
         
         # 计算Pa
-        Pa = COEFF_Pa * (t / D) * sigma_flow * arccos_term
+        Pa = 0.382 * (t / D) * sigma_flow * arccos_term
         
         return Pa
 
@@ -94,7 +94,7 @@ class CrackVelocityCalculator:
         term2 = ((P / Pa) - 1) ** 0.393
         
         # 计算Vc
-        Vc = COEFF_Vc * term1 * term2
+        Vc = 0.67 * term1 * term2
         
         return Vc
 
@@ -111,15 +111,15 @@ class CrackVelocityCalculator:
         返回:
         DpAp: 断裂阻力比
         """
-        # 计算各项
-        Dp = 3.29 * t ** 0.5 * Cv ** 0.544
-        DpAp = Dp / Ac
-        print(f"根据 Dp 计算得到的 Dp/Ap = {DpAp:.4f}")
+        # # 计算各项
+        # Dp = 3.29 * t ** 0.5 * Cv ** 0.544
+        # DpAp = Dp / Ac
+        # print(f"根据 Dp 计算得到的 Dp/Ap = {DpAp:.4f}")
+        
         term1 = t ** 0.5
         term2 = (Cv / Ac) ** 0.544
-        DpAp = COEFF_DpAp * term1 * term2
+        DpAp = 0.502 * term1 * term2
         print(f"计算得到的 Dp/Ap = {DpAp:.4f}")
-        
         
         return DpAp
 
@@ -138,7 +138,7 @@ class CrackVelocityCalculator:
         return self.calculate_fracture_resistance_ratio(t, Cv, Ac)
 
 
-    def calculate_comprehensive(self):
+    def calculate_comprehensive(self, P):
         """
         综合计算所有参数
     
@@ -164,7 +164,7 @@ class CrackVelocityCalculator:
         Pa = self.calculate_arrest_pressure(self.t, self.D, sigma_flow, R)
         
         # 4. 计算裂纹速度Vc
-        Vc = self.calculate_crack_velocity(sigma_flow, R, self.P, Pa)
+        Vc = self.calculate_crack_velocity(sigma_flow, R, P, Pa)
         
         # 5. 计算断裂阻力比
         DpAp = self.calculate_fracture_resistance_ratio(self.t, self.Cv, self.Ac)
@@ -177,67 +177,6 @@ class CrackVelocityCalculator:
             "Dp/Ap": DpAp
         }
 
-
-    def calculate_decompression_velocity(self, P0, T0, gas_type="hydrogen"):
-        """
-        计算天然气管道的减压速度
-        
-        参数:
-        P0: 初始压力 (MPa)
-        T0: 初始温度 (K)
-        gas_composition: 气体组分字典，如 {"CH4": 0.95, "C2H6": 0.03, ...}
-        gas_type: 气体类型，可选 "natural_gas", "methane", "hydrogen" 等
-        
-        返回:
-        a: 减压速度 (m/s)
-        """
-        # 不同气体的物理性质
-        gas_properties = {
-            "methane": {
-                "gamma": 1.31,      # CH4的等熵指数
-                "R": 518.3,         # CH4的气体常数 (J/(kg·K))
-                "molar_mass": 16.04 # g/mol
-            },
-            "natural_gas": {
-                "gamma": 1.28,      # 典型天然气
-                "R": 518.3,         # 近似值
-                "molar_mass": 18.0  # 近似平均分子量
-            },
-            "hydrogen": {
-                "gamma": 1.41,
-                "R": 4124.0,
-                "molar_mass": 2.02
-            }
-        }
-        
-        # 获取气体性质
-        if gas_type in gas_properties:
-            props = gas_properties[gas_type]
-        else:
-            # 默认使用天然气性质
-            props = gas_properties["natural_gas"]
-        
-        gamma = props["gamma"]
-        R = props["R"]
-        
-        # 计算压缩因子Z（简化计算，实际中可能需要使用状态方程）
-        # 对于高压天然气，Z通常小于1
-        P_MPa = P0
-        T_K = T0
-        
-        # 简化方法：使用理想气体近似，Z≈1
-        # 或者使用经验公式计算Z
-        if P_MPa < 5:  # 低压情况
-            Z = 1.0
-        elif P_MPa < 15:  # 中压情况
-            Z = 0.95
-        else:  # 高压情况
-            Z = 0.9
-        
-        # 计算减压波速
-        a = math.sqrt(gamma * R * T_K * Z)
-        
-        return a
 
     def calculate(self):
         """在给定参数下，绘制裂纹尖端扩展压力 P 与裂纹速度 Vc 的关系曲线。
@@ -280,13 +219,12 @@ def main():
     CrackVelocityCalculator_instance = CrackVelocityCalculator()
 
     # 单独计算示例
-    results = CrackVelocityCalculator_instance.calculate_comprehensive()
-    for key, value in results.items():
-        print(f"{key:10} = {value:.4f}")
+    P_list = [1, 2, 4, 6, 8, 10]
+    for P in P_list:
+        results = CrackVelocityCalculator_instance.calculate_comprehensive(10)
+        for key, value in results.items():
+            print(f"{key:10} = {value:.4f}")
 
-    # 绘制初始压力 (1–15 MPa) 与裂纹速度的关系曲线
-    CrackVelocityCalculator_instance.plot_velocity_vs_pressure(CrackVelocityCalculator_instance.t, CrackVelocityCalculator_instance.D, CrackVelocityCalculator_instance.YS, CrackVelocityCalculator_instance.TS, CrackVelocityCalculator_instance.Cv, CrackVelocityCalculator_instance.Ac,Tc = 300, P_min=1.0, P_max=15.0, step=1.0)
-    
 # 示例使用
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

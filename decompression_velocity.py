@@ -94,6 +94,7 @@ class IsentropicFlowSimulator:
     def calculate_Qv(self, time, P_current):
         temp = pow(2 / (self.gamma + 1), (self.gamma + 1)/(self.gamma - 1))
         v =  P_current * math.sqrt(self.gamma / (self.R * self.T0) * temp)
+        print(f"计算得到的泄漏速度 v = {v:.3f} m/s")
         Qv = v * self.A
         print(f"计算得到的 Qv = {Qv:.6f} kg/s")
         return Qv
@@ -114,7 +115,6 @@ class IsentropicFlowSimulator:
         """
         使用公式1更新状态: u_i = u_{i-1} + (P_{i-1} - P_i)/(a_i * ρ_i)
         """
-        # Qv = self.read_Qv_from_csv(t)  # 假设温度Tc为常数
         Qv = self.calculate_Qv(t, P_prev)
         Qm = Qv * self.dt * rho_prev
         m_current = m_prev - Qm  # 质量守恒
@@ -133,7 +133,6 @@ class IsentropicFlowSimulator:
     def simulate(self, target_W=0.0, tolerance=1e-6):
         """
         运行模拟，直到W_local接近0
-        
         参数:
         target_W: 目标W_local值
         tolerance: 允许的误差
