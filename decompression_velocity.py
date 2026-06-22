@@ -61,6 +61,8 @@ class IsentropicFlowSimulator:
         self.V0 = math.pi * (self.D/2)**2 * self.L  # 初始体积 m³
         self.Pair = 0.0  # 停止压力 Pa
         self.R_ = 8.314  # J/(mol·K)
+        self.A0 = math.pi / 4 * self.D**2  # 管道截面积 m²
+        self.a0 = 1200
         
         # 存储模拟结果
         self.results = {
@@ -70,7 +72,8 @@ class IsentropicFlowSimulator:
             'sound_speed': [],
             'W_local': [],
             'time': [],
-            'quantity': []
+            'quantity': [],
+            'flow_rate': []
         }
     
     def calulate_leakage_area(self, time):
@@ -92,12 +95,17 @@ class IsentropicFlowSimulator:
         return a - u
     
     def calculate_Qv(self, time, P_current):
-        temp = pow(2 / (self.gamma + 1), (self.gamma + 1)/(self.gamma - 1))
-        v =  P_current * math.sqrt(self.gamma / (self.R * self.T0) * temp)
-        print(f"计算得到的泄漏速度 v = {v:.3f} m/s")
-        Qv = v * self.A
-        print(f"计算得到的 Qv = {Qv:.6f} kg/s")
-        return Qv
+        if self.A / self.A0 < 0.2:
+            print("小孔泄漏")
+            temp = pow(2 / (self.gamma + 1), (self.gamma + 1)/(self.gamma - 1))
+            Qeff =  self.Cd * P_current * self.A * math.sqrt(self.gamma / (self.R * self.T0) * temp)
+        elif self.A / self.A0 < 0.6:
+            print("中孔泄漏")
+        else:
+            print("大孔泄漏")
+            Qeff = 2 * 0.33 * 0.62 * math.pi * self.D**2 / 4 * P_current * 0.76 / self.a0 
+        print(f"计算得到的 Qeff = {Qeff:.6f} kg/s")
+        return Qeff
 
     def read_Qv_from_csv(self, time):
         """从CSV文件中读取Qv值"""
@@ -115,20 +123,20 @@ class IsentropicFlowSimulator:
         """
         使用公式1更新状态: u_i = u_{i-1} + (P_{i-1} - P_i)/(a_i * ρ_i)
         """
-        Qv = self.calculate_Qv(t, P_prev)
-        Qm = Qv * self.dt * rho_prev
+        Qeff = self.calculate_Qv(t, P_prev)
+        Qm = Qeff * self.dt * rho_prev
         m_current = m_prev - Qm  # 质量守恒
         P_current = P_prev * m_current / m_prev
         rho_current = rho_prev * (P_current / P_prev) ** (1/self.gamma)
-        
+
         # 计算新的声速
         a_new = self.calculate_sound_speed(P_current, rho_current)
-        
+
         # 使用公式1计算速度变化
         delta_u = (P_prev - P_current) / (a_new * rho_current)
         u_current = u_prev + delta_u
-        
-        return P_current, rho_current, u_current, a_new, m_current
+
+        return P_current, rho_current, u_current, a_new, m_current, Qeff
     
     def simulate(self, target_W=0.0, tolerance=1e-6):
         """
@@ -161,6 +169,7 @@ class IsentropicFlowSimulator:
             self.results['W_local'].append(W)
             self.results['time'].append(t)
             self.results['quantity'].append(rho * self.V0)  # 假设体积V0不变
+            self.results['flow_rate'].append(0.0)  # 初始步还没有Qeff，先填0
             
             # 检查是否达到目标
             if np.abs(W - target_W) < tolerance:
@@ -174,7 +183,8 @@ class IsentropicFlowSimulator:
                 break
             
             # 更新状态
-            P, rho, u, a, m = self.update_state(P, rho, u, m, t)
+            P, rho, u, a, m, Qeff = self.update_state(P, rho, u, m, t)
+            self.results['flow_rate'][-1] = Qeff  # 将上一步记录的0替换为实际流量
             W = self.calculate_W_local(a, u)
             
             t += self.dt
@@ -283,7 +293,44 @@ class IsentropicFlowSimulator:
         plt.show()
         
         return fig, fig2
-    
+
+    def plot_flow_and_pressure_drop(self):
+        """绘制时间-流量曲线和时间-压降曲线"""
+        time = self.results['time']
+        flow_rate = self.results['flow_rate']
+        pressure_drop = [(self.results['pressure'][0] - p) / 1e6 for p in self.results['pressure']]  # 压降 (MPa)
+        pressure = [p / 1e6 for p in self.results['pressure']]  # 压力 (MPa)
+
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+        # 1. 时间 vs 流量
+        ax1 = axes[0]
+        ax1.plot(time, flow_rate, 'b-', linewidth=2)
+        ax1.set_xlabel('时间 t (s)')
+        ax1.set_ylabel('质量流量 Qeff (kg/s)')
+        ax1.set_title('时间-流量关系曲线')
+        ax1.grid(True, alpha=0.3)
+
+        # 2. 时间 vs 压力
+        ax2 = axes[1]
+        ax2.plot(time, pressure, 'g-', linewidth=2)
+        ax2.set_xlabel('时间 t (s)')
+        ax2.set_ylabel('压力 P (MPa)')
+        ax2.set_title('时间-压力关系曲线')
+        ax2.grid(True, alpha=0.3)
+
+        # 3. 时间 vs 压降
+        ax3 = axes[2]
+        ax3.plot(time, pressure_drop, 'r-', linewidth=2)
+        ax3.set_xlabel('时间 t (s)')
+        ax3.set_ylabel('压降 ΔP (MPa)')
+        ax3.set_title('时间-压降关系曲线')
+        ax3.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
+        return fig
+
     def print_summary(self):
         """打印模拟结果摘要"""
         print("\n" + "="*60)

@@ -116,11 +116,15 @@ class CrackVelocityCalculator:
         # DpAp = Dp / Ac
         # print(f"根据 Dp 计算得到的 Dp/Ap = {DpAp:.4f}")
         
-        term1 = t ** 0.5
-        term2 = (Cv / Ac) ** 0.544
-        DpAp = 0.502 * term1 * term2
-        print(f"计算得到的 Dp/Ap = {DpAp:.4f}")
+        # 适用于CVN>100 J
+        # term1 = t ** 0.5
+        # term2 = (Cv / Ac) ** 0.544
+        # DpAp = 0.502 * term1 * term2
+        # print(f"计算得到的 Dp/Ap = {DpAp:.4f}")
         
+        # 适用于CVN<100 J
+        DpAp = 3 * Cv / Ac + 0.63
+        print(f"计算得到的 Dp/Ap = {DpAp:.4f}")
         return DpAp
 
     def calculate_R(self, t, Cv, Ac):
